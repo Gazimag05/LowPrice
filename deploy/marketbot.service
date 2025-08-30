@@ -1,0 +1,28 @@
+[Unit]
+Description=Marketplace Price Aggregator Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=marketbot
+Group=marketbot
+WorkingDirectory=/opt/marketbot
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/marketbot/.env
+ExecStart=/opt/marketbot/.venv/bin/python /opt/marketbot/bot.py
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/marketbot
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target
