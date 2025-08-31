@@ -1,5 +1,4 @@
 import asyncio
-import os
 import sys
 from contextlib import asynccontextmanager
 
@@ -12,8 +11,6 @@ from .config import load_config, Config
 from .handlers.common import router as common_router, init_dependencies
 from .providers.wb import WildberriesProvider
 from .services.aggregator import Aggregator
-from .services.storage import Storage
-from .services.tracker import Tracker
 
 
 @asynccontextmanager
@@ -37,7 +34,7 @@ async def main() -> None:
 	# HTTP client shared across providers
 	http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=10.0))
 
-	# Providers
+	# Providers (start with Wildberries; add more providers here)
 	wb_provider = WildberriesProvider(
 		http_client=http_client,
 		app_type=config.wb_app_type,
@@ -48,31 +45,17 @@ async def main() -> None:
 
 	aggregator = Aggregator(providers=providers)
 
-	# Storage and tracker
-	storage = Storage(db_path=os.path.join(os.getcwd(), "bot.db"))
-	await storage.init()
-
 	bot = Bot(token=config.bot_token, parse_mode=ParseMode.HTML)
 	dp = Dispatcher()
 
 	# Init router dependencies and include routers
-	init_dependencies(aggregator=aggregator, storage=storage, config=config)
+	init_dependencies(aggregator=aggregator, config=config)
 	dp.include_router(common_router)
-
-	tracker = Tracker(
-		bot=bot,
-		storage=storage,
-		providers={p.name: p for p in providers},
-		interval_seconds=config.track_interval_seconds,
-	)
-	await tracker.start()
 
 	try:
 		await dp.start_polling(bot)
 	finally:
-		await tracker.stop()
 		await http_client.aclose()
-		await storage.close()
 
 
 if __name__ == "__main__":

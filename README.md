@@ -1,27 +1,24 @@
 ## Telegram Price Compare Bot (Yolo-like)
 
 Features:
-- Search products and compare prices across providers (starting with Wildberries)
-- Send a product link to get current price and title
-- Track items and receive price drop alerts
+- Compare prices for a product across providers (starting with Wildberries)
+- Send a product link or text query; bot shows the cheapest offers
 
 ### Setup
 
 1) Create and fill `.env` from `.env.example` (set `BOT_TOKEN`).
 2) Install deps:
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 3) Run bot:
 ```bash
-python -m bot
+python3 -m bot
 ```
 
 ### Commands
 - /start — help and usage
-- Send text query or a marketplace link
-- "Track" button to track an item, /list to list, /untrack to stop
+- Send text query or a marketplace link; bot replies with cheapest options
 
 ### Providers
 - Wildberries: uses public endpoints for search and product details
