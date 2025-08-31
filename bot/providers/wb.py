@@ -4,10 +4,13 @@ import re
 from typing import List, Optional
 
 import httpx
+import logging
 
 from ..models import Offer
 from . import Provider
 
+
+logger = logging.getLogger(__name__)
 
 _WB_LINK_ID_RE = re.compile(r"/catalog/(\d+)/detail\\.aspx", re.IGNORECASE)
 _WB_NM_PARAM_RE = re.compile(r"[?&]nm=(\d+)")
@@ -23,7 +26,7 @@ class WildberriesProvider(Provider):
 		self._dest = dest
 
 	def can_handle_url(self, url: str) -> bool:
-		return "wildberries" in url or "wb.ru" in url
+		return "wildberries.ru" in url or "wildberries" in url or "wb.ru" in url
 
 	def build_url(self, product_id: str) -> str:
 		return f"https://www.wildberries.ru/catalog/{product_id}/detail.aspx"
@@ -37,29 +40,20 @@ class WildberriesProvider(Provider):
 			return m.group(1)
 		return None
 
-	async def search(self, query: str, limit: int = 10) -> List[Offer]:
-		# Public search API; may change over time, kept simple here
-		params = {
-			"appType": str(self._app_type),
-			"curr": self._currency,
-			"dest": str(self._dest),
-			"query": query,
-			"resultset": "catalog",
-			"spp": "30",
-			"searchPrecise": "1",
-		}
-		url = "https://search.wb.ru/exactmatch/ru/common/v4/search"
-		resp = await self._http.get(url, params=params, headers={"User-Agent": "Mozilla/5.0"})
+	async def _fetch_search(self, base_url: str, params: dict) -> List[Offer]:
+		resp = await self._http.get(base_url, params=params, headers={"User-Agent": "Mozilla/5.0"})
 		resp.raise_for_status()
 		data = resp.json()
 		products = (data.get("data") or {}).get("products") or []
 		offers: List[Offer] = []
-		for p in products[:limit]:
+		for p in products:
 			nm_id = str(p.get("id") or p.get("nmId") or "")
 			if not nm_id:
 				continue
-			title = p.get("name") or p.get("brand") or "WB Item"
+			title = (p.get("name") or p.get("brand") or "WB Item").strip()
 			price_minor = int(p.get("salePriceU") or p.get("priceU") or 0)
+			if price_minor <= 0:
+				continue
 			offers.append(
 				Offer(
 					provider=self.name,
@@ -71,6 +65,45 @@ class WildberriesProvider(Provider):
 				)
 			)
 		return offers
+
+	async def search(self, query: str, limit: int = 10) -> List[Offer]:
+		q = (query or "").strip()
+		if len(q) < 2:
+			return []
+		params = {
+			"appType": str(self._app_type),
+			"curr": self._currency,
+			"dest": str(self._dest),
+			"query": q,
+			"resultset": "catalog",
+			"spp": "30",
+			"searchPrecise": "1",
+			"page": "1",
+			"limit": str(max(10, limit * 5)),
+			"sort": "priceup",
+		}
+		urls = [
+			"https://search.wb.ru/exactmatch/ru/common/v5/search",
+			"https://search.wb.ru/exactmatch/ru/common/v4/search",
+		]
+		all_offers: List[Offer] = []
+		for u in urls:
+			try:
+				offs = await self._fetch_search(u, params)
+				logger.info("WB search at %s returned %d items for query '%s'", u, len(offs), q)
+				all_offers.extend(offs)
+			except Exception as e:
+				logger.warning("WB search failed at %s: %s", u, e)
+		if not all_offers:
+			return []
+		# Keep unique by product_id and take cheapest
+		uniq: dict[str, Offer] = {}
+		for o in all_offers:
+			prev = uniq.get(o.product_id)
+			if prev is None or o.price_minor < prev.price_minor:
+				uniq[o.product_id] = o
+		result = sorted(uniq.values(), key=lambda x: x.price_minor)[:limit]
+		return result
 
 	async def get_by_id(self, product_id: str) -> Optional[Offer]:
 		params = {
@@ -87,8 +120,10 @@ class WildberriesProvider(Provider):
 		if not products:
 			return None
 		p = products[0]
-		title = p.get("name") or p.get("brand") or "WB Item"
+		title = (p.get("name") or p.get("brand") or "WB Item").strip()
 		price_minor = int(p.get("salePriceU") or p.get("priceU") or 0)
+		if price_minor <= 0:
+			return None
 		return Offer(
 			provider=self.name,
 			product_id=str(product_id),

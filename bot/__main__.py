@@ -7,6 +7,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 import httpx
+import logging
 
 from .config import load_config, Config
 from .handlers.common import router as common_router, init_dependencies
@@ -21,6 +22,9 @@ async def lifespan(bot: Bot):
 
 
 async def main() -> None:
+	# Basic logging
+	logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
 	# Use uvloop when available
 	try:
 		uvloop.install()
@@ -33,7 +37,7 @@ async def main() -> None:
 		sys.exit(1)
 
 	# HTTP client shared across providers
-	http_client = httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=10.0))
+	http_client = httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=10.0))
 
 	# Providers (start with Wildberries; add more providers here)
 	wb_provider = WildberriesProvider(
