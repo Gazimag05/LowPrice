@@ -1,0 +1,15 @@
+version: "3.9"
+services:
+  pricebot:
+    build: .
+    image: pricebot:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=Europe/Moscow
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
