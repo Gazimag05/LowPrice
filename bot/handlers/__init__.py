@@ -1,0 +1,1 @@
+from .common import router  # noqa: F401
