@@ -15,6 +15,14 @@ logger = logging.getLogger(__name__)
 _WB_LINK_ID_RE = re.compile(r"/catalog/(\d+)/detail\\.aspx", re.IGNORECASE)
 _WB_NM_PARAM_RE = re.compile(r"[?&]nm=(\d+)")
 
+_DEFAULT_HEADERS = {
+	"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0 Safari/537.36",
+	"Accept": "application/json, text/plain, */*",
+	"Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+	"Origin": "https://www.wildberries.ru",
+	"Referer": "https://www.wildberries.ru/",
+}
+
 
 class WildberriesProvider(Provider):
 	name = "wildberries"
@@ -41,7 +49,7 @@ class WildberriesProvider(Provider):
 		return None
 
 	async def _fetch_search(self, base_url: str, params: dict) -> List[Offer]:
-		resp = await self._http.get(base_url, params=params, headers={"User-Agent": "Mozilla/5.0"})
+		resp = await self._http.get(base_url, params=params, headers=_DEFAULT_HEADERS)
 		resp.raise_for_status()
 		data = resp.json()
 		products = (data.get("data") or {}).get("products") or []
@@ -83,6 +91,7 @@ class WildberriesProvider(Provider):
 			"sort": "priceup",
 		}
 		urls = [
+			"https://search.wb.ru/exactmatch/ru/common/v6/search",
 			"https://search.wb.ru/exactmatch/ru/common/v5/search",
 			"https://search.wb.ru/exactmatch/ru/common/v4/search",
 		]
@@ -96,7 +105,6 @@ class WildberriesProvider(Provider):
 				logger.warning("WB search failed at %s: %s", u, e)
 		if not all_offers:
 			return []
-		# Keep unique by product_id and take cheapest
 		uniq: dict[str, Offer] = {}
 		for o in all_offers:
 			prev = uniq.get(o.product_id)
@@ -112,10 +120,16 @@ class WildberriesProvider(Provider):
 			"dest": str(self._dest),
 			"nm": product_id,
 		}
-		url = "https://card.wb.ru/cards/detail"
-		resp = await self._http.get(url, params=params, headers={"User-Agent": "Mozilla/5.0"})
-		resp.raise_for_status()
-		data = resp.json()
+		url = "https://card.wb.ru/cards/v2/detail"
+		resp = await self._http.get(url, params=params, headers=_DEFAULT_HEADERS)
+		if resp.status_code != 200:
+			logger.warning("WB detail status %s for nm=%s", resp.status_code, product_id)
+			return None
+		try:
+			data = resp.json()
+		except Exception as e:
+			logger.warning("WB detail not JSON for nm=%s: %s", product_id, e)
+			return None
 		products = (data.get("data") or {}).get("products") or []
 		if not products:
 			return None
