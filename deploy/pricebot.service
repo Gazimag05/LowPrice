@@ -1,0 +1,17 @@
+[Unit]
+Description=Telegram Price Compare Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/pricebot
+EnvironmentFile=/opt/pricebot/.env
+ExecStart=/usr/bin/python3 -m bot
+Restart=on-failure
+RestartSec=5
+User=pricebot
+Group=pricebot
+
+[Install]
+WantedBy=multi-user.target
