@@ -23,6 +23,10 @@ _DEFAULT_HEADERS = {
 	"Referer": "https://www.wildberries.ru/",
 }
 
+# Broad regions/stores list improves WB API responses from various IPs
+_REGIONS = "80,64,38,4,33,70,82,86,75,30,31,22,66,68,69,48,1,105,114"
+_STORES = "117501,117986,173086,120602,4013,686,132043,507,3158,6158"
+
 
 class WildberriesProvider(Provider):
 	name = "wildberries"
@@ -50,6 +54,8 @@ class WildberriesProvider(Provider):
 
 	async def _fetch_search(self, base_url: str, params: dict) -> List[Offer]:
 		resp = await self._http.get(base_url, params=params, headers=_DEFAULT_HEADERS)
+		ct = resp.headers.get("content-type", "")
+		logger.info("WB search GET %s -> %s (%s)", resp.url, resp.status_code, ct)
 		resp.raise_for_status()
 		data = resp.json()
 		products = (data.get("data") or {}).get("products") or []
@@ -82,12 +88,14 @@ class WildberriesProvider(Provider):
 			"appType": str(self._app_type),
 			"curr": self._currency,
 			"dest": str(self._dest),
+			"regions": _REGIONS,
+			"stores": _STORES,
 			"query": q,
 			"resultset": "catalog",
 			"spp": "30",
 			"searchPrecise": "1",
 			"page": "1",
-			"limit": str(max(10, limit * 5)),
+			"limit": str(max(10, limit * 10)),
 			"sort": "priceup",
 		}
 		urls = [
@@ -118,17 +126,20 @@ class WildberriesProvider(Provider):
 			"appType": str(self._app_type),
 			"curr": self._currency,
 			"dest": str(self._dest),
+			"regions": _REGIONS,
+			"stores": _STORES,
+			"spp": "30",
 			"nm": product_id,
 		}
 		url = "https://card.wb.ru/cards/v2/detail"
 		resp = await self._http.get(url, params=params, headers=_DEFAULT_HEADERS)
+		ct = resp.headers.get("content-type", "")
+		logger.info("WB detail GET %s -> %s (%s)", resp.url, resp.status_code, ct)
 		if resp.status_code != 200:
-			logger.warning("WB detail status %s for nm=%s", resp.status_code, product_id)
 			return None
 		try:
 			data = resp.json()
-		except Exception as e:
-			logger.warning("WB detail not JSON for nm=%s: %s", product_id, e)
+		except Exception:
 			return None
 		products = (data.get("data") or {}).get("products") or []
 		if not products:
